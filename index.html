@@ -3,316 +3,238 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Face Mesh</title>
+<title>Face Avatar Lite 3D</title>
+
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700&display=swap');
+body{
+  margin:0;
+  background:#0f1220;
+  color:#fff;
+  font-family:sans-serif;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+}
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+canvas, video{
+  width:90vw;
+  max-width:320px;
+  border-radius:12px;
+  margin:8px;
+}
 
-  body {
-    background: #000;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-    font-family: 'Share Tech Mono', monospace;
-    overflow: hidden;
-  }
+.controls{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  justify-content:center;
+}
 
-  /* Scanline overlay */
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background: repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 2px,
-      rgba(0, 255, 80, 0.015) 2px,
-      rgba(0, 255, 80, 0.015) 4px
-    );
-    pointer-events: none;
-    z-index: 100;
-  }
+button{
+  padding:8px 12px;
+  border:none;
+  border-radius:8px;
+  background:#00d4ff;
+  color:#000;
+  font-weight:bold;
+}
 
-  .header {
-    text-align: center;
-    margin-bottom: 18px;
-  }
+.active{
+  background:#00ff88;
+}
 
-  .header h1 {
-    font-family: 'Orbitron', monospace;
-    font-size: 13px;
-    letter-spacing: 6px;
-    color: #00ff50;
-    text-shadow: 0 0 10px #00ff5088;
-    text-transform: uppercase;
-  }
-
-  .header .sub {
-    font-size: 10px;
-    letter-spacing: 3px;
-    color: #00ff5055;
-    margin-top: 4px;
-  }
-
-  .container {
-    display: flex;
-    gap: 16px;
-    align-items: center;
-  }
-
-  .panel {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .label {
-    font-size: 9px;
-    letter-spacing: 3px;
-    color: #00ff5077;
-    text-transform: uppercase;
-  }
-
-  .frame {
-    position: relative;
-    width: 180px;
-    height: 240px;
-    border-radius: 10px;
-    overflow: hidden;
-  }
-
-  /* Corner brackets */
-  .frame::before,
-  .frame::after {
-    content: '';
-    position: absolute;
-    width: 16px;
-    height: 16px;
-    z-index: 10;
-  }
-  .frame::before {
-    top: 6px; left: 6px;
-    border-top: 2px solid #00ff50;
-    border-left: 2px solid #00ff50;
-    border-radius: 3px 0 0 0;
-  }
-  .frame::after {
-    bottom: 6px; right: 6px;
-    border-bottom: 2px solid #00ff50;
-    border-right: 2px solid #00ff50;
-    border-radius: 0 0 3px 0;
-  }
-
-  .corner-tr, .corner-bl {
-    position: absolute;
-    width: 16px;
-    height: 16px;
-    z-index: 10;
-  }
-  .corner-tr {
-    top: 6px; right: 6px;
-    border-top: 2px solid #00ff50;
-    border-right: 2px solid #00ff50;
-    border-radius: 0 3px 0 0;
-  }
-  .corner-bl {
-    bottom: 6px; left: 6px;
-    border-bottom: 2px solid #00ff50;
-    border-left: 2px solid #00ff50;
-    border-radius: 0 0 0 3px;
-  }
-
-  video, canvas {
-    position: absolute;
-    top: 0; left: 0;
-    width: 100%;
-    height: 100%;
-    border-radius: 10px;
-    background: #060f06;
-    object-fit: cover;
-  }
-
-  video {
-    transform: scaleX(-1);
-  }
-
-  /* Vignette on video */
-  .vignette {
-    position: absolute;
-    inset: 0;
-    border-radius: 10px;
-    background: radial-gradient(ellipse at center, transparent 60%, #000000aa 100%);
-    z-index: 5;
-    pointer-events: none;
-  }
-
-  .divider {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    color: #00ff5033;
-    font-size: 11px;
-  }
-
-  .divider .line {
-    width: 1px;
-    height: 40px;
-    background: linear-gradient(to bottom, transparent, #00ff5055, transparent);
-  }
-
-  .status {
-    margin-top: 14px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 9px;
-    letter-spacing: 3px;
-    color: #00ff5055;
-    text-transform: uppercase;
-  }
-
-  .dot {
-    width: 6px;
-    height: 6px;
-    background: #00ff50;
-    border-radius: 50%;
-    box-shadow: 0 0 6px #00ff50;
-    animation: blink 1.4s ease-in-out infinite;
-  }
-
-  @keyframes blink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.2; }
-  }
+.status{
+  margin:10px;
+  font-size:14px;
+  opacity:.8;
+}
 </style>
 </head>
+
 <body>
 
-<div class="header">
-  <h1>Face Mesh</h1>
-  <div class="sub">MediaPipe · Real-time Detection</div>
+<h2>🎭 Face Avatar 3D Lite</h2>
+
+<video id="video" autoplay playsinline muted></video>
+<canvas id="canvas"></canvas>
+
+<div class="controls">
+  <button onclick="setStyle('cyber')">Cyber</button>
+  <button onclick="setStyle('neon')">Neon</button>
+  <button onclick="setStyle('emoji')">Emoji</button>
+  <button onclick="toggleMesh()">Mesh</button>
+  <button onclick="snapshot()">📸</button>
+  <button onclick="toggleCamera()" id="camBtn">Stop</button>
 </div>
 
-<div class="container">
+<div class="status" id="status">Iniciando...</div>
 
-  <div class="panel">
-    <div class="label">Input</div>
-    <div class="frame">
-      <video id="video" autoplay playsinline></video>
-      <div class="vignette"></div>
-      <div class="corner-tr"></div>
-      <div class="corner-bl"></div>
-    </div>
-  </div>
-
-  <div class="divider">
-    <div class="line"></div>
-    ▶
-    <div class="line"></div>
-  </div>
-
-  <div class="panel">
-    <div class="label">Mesh</div>
-    <div class="frame">
-      <canvas id="canvas"></canvas>
-      <div class="vignette"></div>
-      <div class="corner-tr"></div>
-      <div class="corner-bl"></div>
-    </div>
-  </div>
-
-</div>
-
-<div class="status">
-  <div class="dot"></div>
-  <span id="statusText">Iniciando câmera...</span>
-</div>
-
-<!-- MediaPipe -->
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
 <script>
-const video = document.getElementById("video");
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
-const statusText = document.getElementById("statusText");
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const status = document.getElementById('status');
 
-canvas.width = 180;
-canvas.height = 240;
+canvas.width = 320;
+canvas.height = 420;
 
+let style = "cyber";
+let showMesh = false;
+let running = true;
+let landmarks = null;
+
+// ===== FaceMesh =====
 const faceMesh = new FaceMesh({
-  locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+  locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`
 });
 
 faceMesh.setOptions({
-  maxNumFaces: 1,
-  refineLandmarks: true,
-  minDetectionConfidence: 0.6,
-  minTrackingConfidence: 0.6
+  maxNumFaces:1,
+  refineLandmarks:true,
+  minDetectionConfidence:0.5,
+  minTrackingConfidence:0.5
 });
 
-faceMesh.onResults((results) => {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+// ===== Desenho =====
+function drawAvatar(){
+  if(!landmarks) return;
 
-  // Dark background
-  ctx.fillStyle = '#060f06';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-    const landmarks = results.multiFaceLandmarks[0];
-
-    drawConnectors(ctx, landmarks, FACEMESH_TESSELATION,
-      { color: '#00ff5030', lineWidth: 0.4 });
-
-    drawConnectors(ctx, landmarks, FACEMESH_CONTOURS,
-      { color: '#00ff50', lineWidth: 1 });
-
-    drawLandmarks(ctx, landmarks,
-      { color: '#00ff5099', radius: 0.8 });
-
-    statusText.textContent = "Rosto detectado";
-  } else {
-    statusText.textContent = "Aguardando rosto...";
-  }
-});
-
-async function startCamera() {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user", width: { ideal: 320 }, height: { ideal: 240 } },
-      audio: false
+  if(showMesh){
+    drawConnectors(ctx, landmarks, FACEMESH_TESSELATION, {
+      color:"#00ff88",
+      lineWidth:0.5
     });
-
-    video.srcObject = stream;
-
-    video.onloadedmetadata = () => {
-      video.play();
-      statusText.textContent = "Câmera ativa";
-
-      const camera = new Camera(video, {
-        onFrame: async () => {
-          await faceMesh.send({ image: video });
-        },
-        width: 320,
-        height: 240
-      });
-
-      camera.start();
-    };
-  } catch (err) {
-    statusText.textContent = "Erro: permissão negada";
-    console.error(err);
   }
+
+  const get = (i)=>({
+    x: landmarks[i].x * canvas.width,
+    y: landmarks[i].y * canvas.height
+  });
+
+  // FACE
+  ctx.beginPath();
+  [10,234,454,152,234].forEach((i,idx)=>{
+    const p = get(i);
+    idx?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);
+  });
+  ctx.closePath();
+
+  if(style==="cyber"){
+    ctx.strokeStyle="#00d4ff";
+    ctx.shadowColor="#00d4ff";
+    ctx.shadowBlur=15;
+  }
+
+  if(style==="neon"){
+    ctx.strokeStyle="#ff00ff";
+    ctx.shadowColor="#ff00ff";
+    ctx.shadowBlur=20;
+  }
+
+  if(style==="emoji"){
+    ctx.fillStyle="#ffd93d";
+    ctx.fill();
+    ctx.strokeStyle="#000";
+    ctx.shadowBlur=0;
+  }
+
+  ctx.lineWidth=2;
+  ctx.stroke();
+  ctx.shadowBlur=0;
+
+  // OLHOS
+  function eye(indices){
+    let cx=0,cy=0;
+    indices.forEach(i=>{
+      const p=get(i);
+      cx+=p.x; cy+=p.y;
+    });
+    cx/=indices.length;
+    cy/=indices.length;
+
+    ctx.beginPath();
+    ctx.arc(cx,cy,6,0,Math.PI*2);
+    ctx.fillStyle="#fff";
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(cx,cy,3,0,Math.PI*2);
+    ctx.fillStyle="#000";
+    ctx.fill();
+  }
+
+  eye([33,133,160]);
+  eye([362,263,387]);
+
+  // BOCA
+  const m1=get(61);
+  const m2=get(291);
+
+  ctx.beginPath();
+  ctx.moveTo(m1.x,m1.y);
+  ctx.lineTo(m2.x,m2.y);
+  ctx.strokeStyle="#ff6b6b";
+  ctx.stroke();
 }
 
-startCamera();
+// ===== RESULTADOS =====
+faceMesh.onResults(res=>{
+  if(res.multiFaceLandmarks.length){
+    landmarks = res.multiFaceLandmarks[0];
+    status.textContent="Rosto detectado";
+    drawAvatar();
+  }else{
+    status.textContent="Aponte o rosto";
+  }
+});
+
+// ===== CÂMERA =====
+let camera;
+
+async function start(){
+  const stream = await navigator.mediaDevices.getUserMedia({video:true});
+  video.srcObject = stream;
+
+  camera = new Camera(video,{
+    onFrame: async ()=>{
+      if(running) await faceMesh.send({image:video});
+    },
+    width:320,
+    height:240
+  });
+
+  camera.start();
+}
+
+function toggleCamera(){
+  running = !running;
+  document.getElementById("camBtn").innerText = running?"Stop":"Start";
+}
+
+// ===== CONTROLES =====
+function setStyle(s){
+  style=s;
+}
+
+function toggleMesh(){
+  showMesh=!showMesh;
+}
+
+function snapshot(){
+  const a=document.createElement("a");
+  a.href=canvas.toDataURL();
+  a.download="avatar.png";
+  a.click();
+}
+
+// ===== INIT =====
+start();
 </script>
 
 </body>
