@@ -2,240 +2,1384 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Face Avatar Lite 3D</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Avatar 3D · FaceSync</title>
 <style>
-body{
-  margin:0;
-  background:#0f1220;
-  color:#fff;
-  font-family:sans-serif;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-}
+  /* ── Reset & Base ─────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-canvas, video{
-  width:90vw;
-  max-width:320px;
-  border-radius:12px;
-  margin:8px;
-}
+  :root {
+    --bg:        #0a0c14;
+    --surface:   #12152080;
+    --border:    #ffffff14;
+    --accent:    #6c63ff;
+    --accent2:   #ff6b9d;
+    --green:     #2affa0;
+    --red:       #ff4d6d;
+    --yellow:    #ffd166;
+    --text:      #e8e8f0;
+    --muted:     #6b6d84;
+    --radius:    14px;
+    --font:      'Segoe UI', system-ui, sans-serif;
+  }
 
-.controls{
-  display:flex;
-  gap:8px;
-  flex-wrap:wrap;
-  justify-content:center;
-}
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+  }
 
-button{
-  padding:8px 12px;
-  border:none;
-  border-radius:8px;
-  background:#00d4ff;
-  color:#000;
-  font-weight:bold;
-}
+  /* ── Layout ───────────────────────────────────── */
+  #app {
+    position: relative;
+    width: 100%; height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
 
-.active{
-  background:#00ff88;
-}
+  /* Canvas Three.js ocupa toda a tela */
+  #threeCanvas {
+    position: absolute;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
+  }
 
-.status{
-  margin:10px;
-  font-size:14px;
-  opacity:.8;
-}
+  /* Vídeo da câmera oculto — só para processamento */
+  #videoFeed {
+    position: absolute;
+    width: 1px; height: 1px;
+    opacity: 0; pointer-events: none;
+  }
+
+  /* ── Header HUD ───────────────────────────────── */
+  #hud-top {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    padding: 12px 16px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    z-index: 10;
+    pointer-events: none;
+  }
+
+  .hud-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 20px;
+    padding: 5px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    pointer-events: none;
+  }
+
+  .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot-green  { background: var(--green);  box-shadow: 0 0 6px var(--green); }
+  .dot-red    { background: var(--red);    box-shadow: 0 0 6px var(--red); }
+  .dot-yellow { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+  .dot-muted  { background: var(--muted); }
+
+  /* ── Status Bar center ────────────────────────── */
+  #status-center {
+    position: absolute;
+    top: 12px; left: 50%; transform: translateX(-50%);
+    z-index: 10;
+    pointer-events: none;
+  }
+
+  /* ── Bottom Controls ──────────────────────────── */
+  #controls {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    padding: 0 20px 28px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    z-index: 10;
+  }
+
+  #status-msg {
+    font-size: 12px;
+    color: var(--muted);
+    text-align: center;
+    min-height: 16px;
+    transition: color .3s;
+  }
+  #status-msg.ok  { color: var(--green); }
+  #status-msg.err { color: var(--red); }
+  #status-msg.warn { color: var(--yellow); }
+
+  .btn-row {
+    display: flex;
+    gap: 12px;
+    width: 100%;
+    max-width: 340px;
+  }
+
+  .btn {
+    flex: 1;
+    height: 52px;
+    border: none;
+    border-radius: 26px;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: .03em;
+    cursor: pointer;
+    transition: transform .15s, opacity .15s, box-shadow .2s;
+    -webkit-tap-highlight-color: transparent;
+    outline: none;
+  }
+  .btn:active { transform: scale(.95); }
+
+  #btnStart {
+    background: linear-gradient(135deg, var(--accent), #a78bfa);
+    color: #fff;
+    box-shadow: 0 4px 20px #6c63ff55;
+  }
+  #btnStart:disabled {
+    opacity: .4; box-shadow: none; cursor: not-allowed;
+  }
+
+  #btnStop {
+    background: linear-gradient(135deg, var(--red), #ff8fa3);
+    color: #fff;
+    box-shadow: 0 4px 20px #ff4d6d44;
+  }
+  #btnStop:disabled {
+    opacity: .4; box-shadow: none; cursor: not-allowed;
+  }
+
+  /* ── Splash / Loading overlay ─────────────────── */
+  #splash {
+    position: absolute;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    z-index: 100;
+    transition: opacity .6s;
+  }
+  #splash.hidden { opacity: 0; pointer-events: none; }
+
+  .splash-logo {
+    font-size: 42px;
+    font-weight: 900;
+    letter-spacing: -.02em;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .splash-sub {
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .splash-detail {
+    font-size: 12px;
+    color: var(--muted);
+    max-width: 240px;
+    text-align: center;
+    line-height: 1.6;
+  }
+
+  /* ── Error Panel ──────────────────────────────── */
+  #errorPanel {
+    position: absolute;
+    inset: 0;
+    background: #0a0c14ee;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    z-index: 50;
+    padding: 30px;
+    text-align: center;
+  }
+  #errorPanel.show { display: flex; }
+  #errorPanel .icon { font-size: 48px; }
+  #errorPanel h2 { font-size: 18px; color: var(--red); }
+  #errorPanel p  { font-size: 13px; color: var(--muted); line-height: 1.6; }
+  #btnRetry {
+    margin-top: 8px;
+    padding: 12px 28px;
+    border-radius: 24px;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  /* ── FPS counter ──────────────────────────────── */
+  #fpsPill { min-width: 70px; justify-content: center; }
 </style>
 </head>
-
 <body>
+<div id="app">
 
-<h2>🎭 Face Avatar 3D Lite</h2>
+  <!-- Canvas de renderização Three.js -->
+  <canvas id="threeCanvas"></canvas>
 
-<video id="video" autoplay playsinline muted></video>
-<canvas id="canvas"></canvas>
+  <!-- Vídeo oculto para captura da câmera -->
+  <video id="videoFeed" autoplay playsinline muted></video>
 
-<div class="controls">
-  <button onclick="setStyle('cyber')">Cyber</button>
-  <button onclick="setStyle('neon')">Neon</button>
-  <button onclick="setStyle('emoji')">Emoji</button>
-  <button onclick="toggleMesh()">Mesh</button>
-  <button onclick="snapshot()">📸</button>
-  <button onclick="toggleCamera()" id="camBtn">Stop</button>
+  <!-- HUD superior -->
+  <div id="hud-top">
+    <!-- FPS -->
+    <div class="hud-pill" id="fpsPill">
+      <span class="dot dot-muted" id="fpsDot"></span>
+      <span id="fpsVal">-- FPS</span>
+    </div>
+
+    <!-- Status rosto -->
+    <div class="hud-pill" id="facePill">
+      <span class="dot dot-muted" id="faceDot"></span>
+      <span id="faceLabel">Sem rosto</span>
+    </div>
+  </div>
+
+  <!-- Status câmera centralizado -->
+  <div id="status-center">
+    <div class="hud-pill" id="camPill">
+      <span class="dot dot-muted" id="camDot"></span>
+      <span id="camLabel">Câmera inativa</span>
+    </div>
+  </div>
+
+  <!-- Controles inferiores -->
+  <div id="controls">
+    <div id="status-msg">Aguardando início…</div>
+    <div class="btn-row">
+      <button class="btn" id="btnStart">▶ Iniciar</button>
+      <button class="btn" id="btnStop"  disabled>■ Parar</button>
+    </div>
+  </div>
+
+  <!-- Painel de erro -->
+  <div id="errorPanel">
+    <div class="icon">📷</div>
+    <h2 id="errTitle">Sem acesso à câmera</h2>
+    <p id="errMsg">Permita o acesso à câmera nas configurações do navegador e tente novamente.</p>
+    <button id="btnRetry">Tentar novamente</button>
+  </div>
+
+  <!-- Splash / loading inicial -->
+  <div id="splash">
+    <div class="splash-logo">FaceSync</div>
+    <div class="splash-sub">Avatar 3D em tempo real</div>
+    <div class="spinner"></div>
+    <div class="splash-detail" id="splashDetail">Carregando Three.js e MediaPipe…</div>
+  </div>
+
 </div>
 
-<div class="status" id="status">Iniciando...</div>
-
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<!-- ═══════════════════════════════════════════════════════════════
+     SCRIPTS EXTERNOS
+     Three.js r128 via CDN
+     MediaPipe Face Landmarker via CDN
+     ═══════════════════════════════════════════════════════════════ -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
 <script>
-const video = document.getElementById('video');
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
-const status = document.getElementById('status');
+/* ═══════════════════════════════════════════════════════════════════
+   AVATAR 3D COM RASTREAMENTO FACIAL — FaceSync
+   Autor: gerado via Claude (Anthropic)
+   Compatível com Chrome Android moderno
+   ═══════════════════════════════════════════════════════════════════ */
 
-canvas.width = 320;
-canvas.height = 420;
+'use strict';
 
-let style = "cyber";
-let showMesh = false;
-let running = true;
-let landmarks = null;
+// ─────────────────────────────────────────────────────────────────
+// 1. UTILITÁRIOS DE SUAVIZAÇÃO
+// ─────────────────────────────────────────────────────────────────
 
-// ===== FaceMesh =====
-const faceMesh = new FaceMesh({
-  locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`
+/**
+ * Filtro de suavização exponencial (EMA — Exponential Moving Average).
+ * Reduz tremulação em valores ruidosos de rastreamento facial.
+ */
+class SmoothValue {
+  constructor(alpha = 0.15, initial = 0) {
+    this.alpha   = alpha;   // peso da amostra nova (0=congelado, 1=sem filtro)
+    this.value   = initial;
+    this.hasInit = false;
+  }
+  update(raw) {
+    if (!this.hasInit) { this.value = raw; this.hasInit = true; return raw; }
+    this.value = this.alpha * raw + (1 - this.alpha) * this.value;
+    return this.value;
+  }
+}
+
+/**
+ * Versão vetorial do SmoothValue para THREE.Euler / THREE.Vector3.
+ */
+class SmoothVec3 {
+  constructor(alpha = 0.15) {
+    this.x = new SmoothValue(alpha);
+    this.y = new SmoothValue(alpha);
+    this.z = new SmoothValue(alpha);
+  }
+  update(x, y, z) {
+    return { x: this.x.update(x), y: this.y.update(y), z: this.z.update(z) };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 2. ESTADO GLOBAL DO APLICATIVO
+// ─────────────────────────────────────────────────────────────────
+
+const App = {
+  running:     false,  // câmera/rastreamento ativos
+  faceDetected:false,  // rosto visível no frame atual
+  fps:         0,
+  frameCount:  0,
+  lastFpsTime: performance.now(),
+
+  // Stream e MediaPipe
+  stream:      null,
+  faceLandmarker: null,
+  mpReady:     false,
+
+  // Referências DOM
+  video:       null,
+  canvas3d:    null,
+
+  // Three.js
+  renderer:    null,
+  scene:       null,
+  camera:      null,
+  avatar:      null,   // grupo raiz do avatar
+
+  // Filtros de suavização para cada parâmetro facial
+  smooth: {
+    headRot:    new SmoothVec3(0.18),
+    mouthOpen:  new SmoothValue(0.20),
+    smile:      new SmoothValue(0.20),
+    browL:      new SmoothValue(0.18),
+    browR:      new SmoothValue(0.18),
+    blinkL:     new SmoothValue(0.25),
+    blinkR:     new SmoothValue(0.25),
+    gazeX:      new SmoothValue(0.12),
+    gazeY:      new SmoothValue(0.12),
+    scale:      new SmoothValue(0.10, 1),
+  },
+
+  // Parâmetros faciais atuais (pós-suavização)
+  face: {
+    pitch: 0, yaw: 0, roll: 0,
+    mouthOpen: 0,
+    smile: 0,
+    browL: 0, browR: 0,
+    blinkL: 0, blinkR: 0,
+    gazeX: 0, gazeY: 0,
+    scale: 1,
+  },
+};
+
+// ─────────────────────────────────────────────────────────────────
+// 3. INICIALIZAÇÃO PRINCIPAL
+// ─────────────────────────────────────────────────────────────────
+
+window.addEventListener('DOMContentLoaded', () => {
+  App.video   = document.getElementById('videoFeed');
+  App.canvas3d= document.getElementById('threeCanvas');
+
+  // Configurar botões
+  document.getElementById('btnStart').addEventListener('click', startApp);
+  document.getElementById('btnStop') .addEventListener('click', stopApp);
+  document.getElementById('btnRetry').addEventListener('click', () => {
+    hideError(); startApp();
+  });
+
+  // Inicializar Three.js imediatamente (não precisa de câmera)
+  initThreeJS();
+
+  // Carregar MediaPipe em background
+  loadMediaPipe();
 });
 
-faceMesh.setOptions({
-  maxNumFaces:1,
-  refineLandmarks:true,
-  minDetectionConfidence:0.5,
-  minTrackingConfidence:0.5
-});
+// ─────────────────────────────────────────────────────────────────
+// 4. MEDIAPIPE — CARREGAMENTO E CONFIGURAÇÃO
+// ─────────────────────────────────────────────────────────────────
 
-// ===== Desenho =====
-function drawAvatar(){
-  if(!landmarks) return;
+/**
+ * Carrega o script do MediaPipe Tasks Vision dinamicamente.
+ * Usa a versão WASM via CDN jsDelivr (compatível com Chrome Android).
+ */
+function loadMediaPipe() {
+  setSplashDetail('Carregando MediaPipe Face Landmarker…');
 
-  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const script = document.createElement('script');
+  // MediaPipe Tasks Vision bundle
+  script.src = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.js';
+  script.onload  = onMediaPipeLoaded;
+  script.onerror = () => {
+    // Fallback: funcionar sem MediaPipe (avatar idle)
+    console.warn('MediaPipe não carregou. Modo idle ativo.');
+    App.mpReady = false;
+    onReadyToShow('MediaPipe indisponível — modo idle');
+  };
+  document.head.appendChild(script);
+}
 
-  if(showMesh){
-    drawConnectors(ctx, landmarks, FACEMESH_TESSELATION, {
-      color:"#00ff88",
-      lineWidth:0.5
+async function onMediaPipeLoaded() {
+  setSplashDetail('Inicializando detector facial…');
+  try {
+    const vision = await window.MediaPipeTasksVision.FilesetResolver.forVisionTasks(
+      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
+    );
+
+    App.faceLandmarker = await window.MediaPipeTasksVision.FaceLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath:
+          'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+        delegate: 'GPU',
+      },
+      outputFaceBlendshapes: true,
+      outputFacialTransformationMatrixes: true,
+      runningMode: 'VIDEO',
+      numFaces: 1,
     });
+
+    App.mpReady = true;
+    onReadyToShow('MediaPipe pronto');
+  } catch (e) {
+    console.error('Erro ao criar FaceLandmarker:', e);
+    App.mpReady = false;
+    onReadyToShow('MediaPipe falhou — modo idle');
   }
-
-  const get = (i)=>({
-    x: landmarks[i].x * canvas.width,
-    y: landmarks[i].y * canvas.height
-  });
-
-  // FACE
-  ctx.beginPath();
-  [10,234,454,152,234].forEach((i,idx)=>{
-    const p = get(i);
-    idx?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);
-  });
-  ctx.closePath();
-
-  if(style==="cyber"){
-    ctx.strokeStyle="#00d4ff";
-    ctx.shadowColor="#00d4ff";
-    ctx.shadowBlur=15;
-  }
-
-  if(style==="neon"){
-    ctx.strokeStyle="#ff00ff";
-    ctx.shadowColor="#ff00ff";
-    ctx.shadowBlur=20;
-  }
-
-  if(style==="emoji"){
-    ctx.fillStyle="#ffd93d";
-    ctx.fill();
-    ctx.strokeStyle="#000";
-    ctx.shadowBlur=0;
-  }
-
-  ctx.lineWidth=2;
-  ctx.stroke();
-  ctx.shadowBlur=0;
-
-  // OLHOS
-  function eye(indices){
-    let cx=0,cy=0;
-    indices.forEach(i=>{
-      const p=get(i);
-      cx+=p.x; cy+=p.y;
-    });
-    cx/=indices.length;
-    cy/=indices.length;
-
-    ctx.beginPath();
-    ctx.arc(cx,cy,6,0,Math.PI*2);
-    ctx.fillStyle="#fff";
-    ctx.fill();
-
-    ctx.beginPath();
-    ctx.arc(cx,cy,3,0,Math.PI*2);
-    ctx.fillStyle="#000";
-    ctx.fill();
-  }
-
-  eye([33,133,160]);
-  eye([362,263,387]);
-
-  // BOCA
-  const m1=get(61);
-  const m2=get(291);
-
-  ctx.beginPath();
-  ctx.moveTo(m1.x,m1.y);
-  ctx.lineTo(m2.x,m2.y);
-  ctx.strokeStyle="#ff6b6b";
-  ctx.stroke();
 }
 
-// ===== RESULTADOS =====
-faceMesh.onResults(res=>{
-  if(res.multiFaceLandmarks.length){
-    landmarks = res.multiFaceLandmarks[0];
-    status.textContent="Rosto detectado";
-    drawAvatar();
-  }else{
-    status.textContent="Aponte o rosto";
+function onReadyToShow(msg) {
+  setSplashDetail(msg);
+  // Ocultar splash após breve delay
+  setTimeout(() => {
+    document.getElementById('splash').classList.add('hidden');
+  }, 800);
+  setStatus(App.mpReady ? 'Pronto. Pressione Iniciar.' : 'Modo idle ativo.', '');
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 5. CÂMERA — INICIAR / PARAR
+// ─────────────────────────────────────────────────────────────────
+
+async function startApp() {
+  if (App.running) return;
+
+  setStatus('Solicitando câmera…', 'warn');
+  setBtnState(true);
+
+  try {
+    // Solicitar câmera frontal em alta resolução
+    App.stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: 'user',
+        width:  { ideal: 640 },
+        height: { ideal: 480 },
+        frameRate: { ideal: 30 },
+      },
+      audio: false,
+    });
+
+    App.video.srcObject = App.stream;
+    await new Promise(res => { App.video.onloadedmetadata = res; });
+    await App.video.play();
+
+    App.running = true;
+    setCamStatus(true);
+    setStatus('Câmera ativa — rastreando rosto', 'ok');
+
+    // Iniciar loop de detecção
+    requestAnimationFrame(mainLoop);
+
+  } catch (err) {
+    console.error('Erro câmera:', err);
+    setBtnState(false);
+    handleCameraError(err);
+  }
+}
+
+function stopApp() {
+  if (!App.running) return;
+  App.running = false;
+
+  // Parar stream
+  if (App.stream) {
+    App.stream.getTracks().forEach(t => t.stop());
+    App.stream = null;
+  }
+  App.video.srcObject = null;
+  App.faceDetected = false;
+
+  setCamStatus(false);
+  setFaceStatus(false);
+  setStatus('Parado.', '');
+  setBtnState(false);
+
+  // Resetar avatar para pose neutra
+  resetFaceParams();
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 6. LOOP PRINCIPAL (RAF)
+// ─────────────────────────────────────────────────────────────────
+
+let lastMpTime = -1;
+
+function mainLoop(now) {
+  if (!App.running) return;
+  requestAnimationFrame(mainLoop);
+
+  // ── 6a. Rastreamento facial ──────────────────────
+  if (App.mpReady && App.faceLandmarker &&
+      App.video.readyState >= 2 &&
+      now !== lastMpTime) {
+
+    lastMpTime = now;
+    try {
+      const result = App.faceLandmarker.detectForVideo(App.video, now);
+      processFaceResult(result);
+    } catch (e) { /* silencia erros de frame */ }
+  }
+
+  // ── 6b. Animar avatar ───────────────────────────
+  animateAvatar();
+
+  // ── 6c. Renderizar cena ─────────────────────────
+  App.renderer.render(App.scene, App.camera);
+
+  // ── 6d. Calcular FPS ────────────────────────────
+  App.frameCount++;
+  if (now - App.lastFpsTime >= 1000) {
+    App.fps = App.frameCount;
+    App.frameCount = 0;
+    App.lastFpsTime = now;
+    updateFpsHud(App.fps);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 7. PROCESSAMENTO DE RESULTADOS MEDIAPIPE
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Extrai parâmetros faciais dos resultados do MediaPipe e
+ * aplica suavização antes de armazenar em App.face.
+ */
+function processFaceResult(result) {
+  const hasFace = result.faceLandmarks && result.faceLandmarks.length > 0;
+  App.faceDetected = hasFace;
+  setFaceStatus(hasFace);
+
+  if (!hasFace) {
+    // Sem rosto: retornar suavemente para pose neutra
+    relaxFaceParams();
+    return;
+  }
+
+  const lm = result.faceLandmarks[0]; // primeiro rosto detectado
+
+  // ── 7a. Rotação da cabeça via matriz de transformação ──
+  if (result.facialTransformationMatrixes &&
+      result.facialTransformationMatrixes.length > 0) {
+    const mat4 = result.facialTransformationMatrixes[0].data;
+    // Extrair ângulos de Euler da matriz 4x4 (row-major)
+    const pitch = Math.asin(-mat4[6]);
+    const yaw   = Math.atan2(mat4[2], mat4[10]);
+    const roll  = Math.atan2(mat4[4], mat4[5]);
+
+    const r = App.smooth.headRot.update(pitch, yaw, roll);
+    App.face.pitch = r.x;
+    App.face.yaw   = r.y;
+    App.face.roll  = r.z;
+  } else {
+    // Fallback: estimar rotação por landmarks
+    estimateHeadRotation(lm);
+  }
+
+  // ── 7b. Blendshapes (expressões) ──────────────────────
+  if (result.faceBlendshapes && result.faceBlendshapes.length > 0) {
+    const bs = result.faceBlendshapes[0].categories;
+    const get = name => {
+      const c = bs.find(b => b.categoryName === name);
+      return c ? c.score : 0;
+    };
+
+    // Abertura da boca (média das duas metades)
+    const jawOpen = get('jawOpen');
+    App.face.mouthOpen = App.smooth.mouthOpen.update(jawOpen);
+
+    // Sorriso (fusão dos lados)
+    const smile = (get('mouthSmileLeft') + get('mouthSmileRight')) * 0.5;
+    App.face.smile = App.smooth.smile.update(smile);
+
+    // Piscadas
+    App.face.blinkL = App.smooth.blinkL.update(get('eyeBlinkLeft'));
+    App.face.blinkR = App.smooth.blinkR.update(get('eyeBlinkRight'));
+
+    // Sobrancelhas (valor positivo = subida)
+    const bL = get('browInnerUp') + get('browOuterUpLeft')  - get('browDownLeft')  * .6;
+    const bR = get('browInnerUp') + get('browOuterUpRight') - get('browDownRight') * .6;
+    App.face.browL = App.smooth.browL.update(THREE.MathUtils.clamp(bL, -0.5, 1));
+    App.face.browR = App.smooth.browR.update(THREE.MathUtils.clamp(bR, -0.5, 1));
+
+    // Direção do olhar (iris)
+    App.face.gazeX = App.smooth.gazeX.update(
+      (get('eyeLookOutLeft')  - get('eyeLookInLeft')  +
+       get('eyeLookInRight')  - get('eyeLookOutRight')) * 0.5
+    );
+    App.face.gazeY = App.smooth.gazeY.update(
+      (get('eyeLookUpLeft') + get('eyeLookUpRight')) * 0.5 -
+      (get('eyeLookDownLeft') + get('eyeLookDownRight')) * 0.5
+    );
+  } else {
+    // Fallback sem blendshapes
+    estimateExpressionsFromLandmarks(lm);
+  }
+
+  // ── 7c. Distância do rosto (escala) ───────────────────
+  // Usar distância olho-esquerdo↔olho-direito como proxy
+  if (lm.length > 263) {
+    const le = lm[33];  // canto externo olho esquerdo
+    const re = lm[263]; // canto externo olho direito
+    const eyeDist = Math.hypot(le.x - re.x, le.y - re.y);
+    // eyeDist ≈ 0.06 quando longe, 0.25 quando perto
+    const s = THREE.MathUtils.clamp(eyeDist / 0.13, 0.7, 1.6);
+    App.face.scale = App.smooth.scale.update(s);
+  }
+}
+
+/**
+ * Estimativa de rotação da cabeça via landmarks quando a matriz não está disponível.
+ */
+function estimateHeadRotation(lm) {
+  if (lm.length < 468) return;
+  // Ponte do nariz (1) e queixo (152) definem eixo vertical
+  const nose  = lm[1];
+  const chin  = lm[152];
+  const eyeL  = lm[33];
+  const eyeR  = lm[263];
+
+  const dy = chin.y - nose.y;
+  const dz = chin.z - nose.z;
+  const pitch = Math.atan2(dz, dy) * 1.5;
+
+  const midX = (eyeL.x + eyeR.x) * 0.5;
+  const yaw   = (nose.x - midX) * 3.5;
+
+  const roll  = Math.atan2(eyeR.y - eyeL.y, eyeR.x - eyeL.x);
+
+  const r = App.smooth.headRot.update(pitch, yaw, roll);
+  App.face.pitch = r.x;
+  App.face.yaw   = r.y;
+  App.face.roll  = r.z;
+}
+
+/**
+ * Estimativa de expressões via landmarks quando blendshapes não estão disponíveis.
+ */
+function estimateExpressionsFromLandmarks(lm) {
+  if (lm.length < 17) return;
+
+  // Abertura da boca (lábio superior 13 ↔ lábio inferior 14)
+  const lipTop = lm[13];
+  const lipBot = lm[14];
+  const mOpen = THREE.MathUtils.clamp((lipBot.y - lipTop.y) * 30 - 0.1, 0, 1);
+  App.face.mouthOpen = App.smooth.mouthOpen.update(mOpen);
+}
+
+/**
+ * Relaxa suavemente os parâmetros para a pose neutra (sem rosto).
+ */
+function relaxFaceParams() {
+  App.face.pitch     = App.smooth.headRot.x.update(0);
+  App.face.yaw       = App.smooth.headRot.y.update(0);
+  App.face.roll      = App.smooth.headRot.z.update(0);
+  App.face.mouthOpen = App.smooth.mouthOpen.update(0);
+  App.face.smile     = App.smooth.smile.update(0);
+  App.face.browL     = App.smooth.browL.update(0);
+  App.face.browR     = App.smooth.browR.update(0);
+  App.face.blinkL    = App.smooth.blinkL.update(0);
+  App.face.blinkR    = App.smooth.blinkR.update(0);
+  App.face.gazeX     = App.smooth.gazeX.update(0);
+  App.face.gazeY     = App.smooth.gazeY.update(0);
+  App.face.scale     = App.smooth.scale.update(1);
+}
+
+function resetFaceParams() {
+  Object.keys(App.smooth).forEach(k => {
+    const s = App.smooth[k];
+    if (s instanceof SmoothValue) { s.value = 0; s.hasInit = false; }
+    else { ['x','y','z'].forEach(a => { s[a].value=0; s[a].hasInit=false; }); }
+  });
+  Object.assign(App.face, {
+    pitch:0,yaw:0,roll:0,mouthOpen:0,smile:0,
+    browL:0,browR:0,blinkL:0,blinkR:0,gazeX:0,gazeY:0,scale:1
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 8. INICIALIZAÇÃO THREE.JS
+// ─────────────────────────────────────────────────────────────────
+
+function initThreeJS() {
+  const canvas = App.canvas3d;
+  const w = window.innerWidth, h = window.innerHeight;
+
+  // ── Renderer ──────────────────────────────────────────
+  App.renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: true,
+    alpha: false,
+    powerPreference: 'high-performance',
+  });
+  App.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  App.renderer.setSize(w, h);
+  App.renderer.shadowMap.enabled = false; // desativado p/ performance
+
+  // ── Cena ──────────────────────────────────────────────
+  App.scene = new THREE.Scene();
+  App.scene.background = new THREE.Color(0x0a0c14);
+
+  // Névoa suave para profundidade
+  App.scene.fog = new THREE.Fog(0x0a0c14, 8, 20);
+
+  // ── Câmera ────────────────────────────────────────────
+  App.camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 100);
+  App.camera.position.set(0, 0.2, 5.5);
+
+  // ── Iluminação ────────────────────────────────────────
+  // Luz ambiente suave
+  const ambient = new THREE.AmbientLight(0xffffff, 0.45);
+  App.scene.add(ambient);
+
+  // Luz direcional principal (frente-cima-direita)
+  const dirLight = new THREE.DirectionalLight(0xffd4a8, 1.1);
+  dirLight.position.set(2, 4, 5);
+  App.scene.add(dirLight);
+
+  // Luz de preenchimento (esquerda, fria)
+  const fillLight = new THREE.DirectionalLight(0xa8c4ff, 0.5);
+  fillLight.position.set(-3, 0, 2);
+  App.scene.add(fillLight);
+
+  // Luz de contorno (atrás)
+  const rimLight = new THREE.DirectionalLight(0x6c63ff, 0.4);
+  rimLight.position.set(0, 2, -4);
+  App.scene.add(rimLight);
+
+  // Ponto de luz colorida no topo (estético)
+  const topLight = new THREE.PointLight(0xff6b9d, 0.6, 12);
+  topLight.position.set(0, 5, 2);
+  App.scene.add(topLight);
+
+  // ── Background decorativo ─────────────────────────────
+  addBackgroundParticles();
+
+  // ── Construir avatar ──────────────────────────────────
+  App.avatar = buildAvatar();
+  App.scene.add(App.avatar.root);
+
+  // ── Redimensionamento ─────────────────────────────────
+  window.addEventListener('resize', onResize);
+
+  // Primeiro render (idle)
+  App.renderer.render(App.scene, App.camera);
+  startIdleAnimation();
+}
+
+function onResize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  App.camera.aspect = w / h;
+  App.camera.updateProjectionMatrix();
+  App.renderer.setSize(w, h);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 9. PARTÍCULAS DE BACKGROUND
+// ─────────────────────────────────────────────────────────────────
+
+function addBackgroundParticles() {
+  const count  = 120;
+  const geo    = new THREE.BufferGeometry();
+  const pos    = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+
+  const palette = [
+    new THREE.Color(0x6c63ff),
+    new THREE.Color(0xff6b9d),
+    new THREE.Color(0x2affa0),
+  ];
+
+  for (let i = 0; i < count; i++) {
+    pos[i*3]   = (Math.random() - 0.5) * 18;
+    pos[i*3+1] = (Math.random() - 0.5) * 18;
+    pos[i*3+2] = (Math.random() - 0.5) * 6 - 4;
+
+    const c = palette[Math.floor(Math.random() * palette.length)];
+    colors[i*3]   = c.r;
+    colors[i*3+1] = c.g;
+    colors[i*3+2] = c.b;
+  }
+
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('color',    new THREE.BufferAttribute(colors, 3));
+
+  const mat = new THREE.PointsMaterial({
+    size: 0.05,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.6,
+    sizeAttenuation: true,
+  });
+
+  const particles = new THREE.Points(geo, mat);
+  particles.name = 'bg-particles';
+  App.scene.add(particles);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 10. CONSTRUÇÃO DO AVATAR 3D
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Constrói o personagem 3D estilizado.
+ * Retorna um objeto com referências a todas as partes animáveis.
+ */
+function buildAvatar() {
+  const av = { root: new THREE.Group() };
+
+  // ── Materiais ─────────────────────────────────────────
+  const skinColor   = 0xffd5a8;
+  const skinDark    = 0xe8b07a;
+  const eyeWhite    = 0xf5f5ff;
+  const pupilColor  = 0x1a1a2e;
+  const irisColor   = 0x5c9eff;
+  const browColor   = 0x6b4226;
+  const mouthColor  = 0xff8fa3;
+  const innerMouth  = 0x8b1a2e;
+  const toothColor  = 0xfafafa;
+  const outlineCol  = 0x1a0a00;
+
+  const mSkin    = mat(skinColor,  0.3, 0.1);
+  const mSkinD   = mat(skinDark,   0.2, 0.1);
+  const mEyeW    = mat(eyeWhite,   0.1, 0.5);
+  const mPupil   = mat(pupilColor, 0.0, 0.8);
+  const mIris    = mat(irisColor,  0.0, 0.6);
+  const mBrow    = mat(browColor,  0.3, 0.0);
+  const mMouth   = mat(mouthColor, 0.1, 0.3);
+  const mInner   = mat(innerMouth, 0.0, 0.0);
+  const mTooth   = mat(toothColor, 0.05,0.5);
+  const mHair    = mat(0x1a1a2e,   0.3, 0.1);
+  const mNeck    = mat(skinColor,  0.3, 0.1);
+  const mOutline = new THREE.MeshBasicMaterial({ color: outlineCol, side: THREE.BackSide });
+
+  function mat(hex, rough=0.5, metal=0) {
+    return new THREE.MeshStandardMaterial({ color: hex, roughness: rough, metalness: metal });
+  }
+
+  // ── Helper de outline cartoon ─────────────────────────
+  function addOutline(mesh, scale=1.06) {
+    const o = new THREE.Mesh(mesh.geometry, mOutline.clone());
+    o.scale.setScalar(scale);
+    mesh.add(o);
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // PESCOÇO
+  // ═══════════════════════════════════════════════════════
+  const neckGeo  = new THREE.CylinderGeometry(0.18, 0.22, 0.45, 12);
+  const neck     = new THREE.Mesh(neckGeo, mNeck);
+  neck.position.y = -0.78;
+  addOutline(neck, 1.07);
+  av.root.add(neck);
+
+  // ═══════════════════════════════════════════════════════
+  // CABEÇA (pivot de rotação)
+  // ═══════════════════════════════════════════════════════
+  av.headPivot = new THREE.Group();
+  av.headPivot.position.y = 0; // centrado na origem
+  av.root.add(av.headPivot);
+
+  // Malha da cabeça — esferoide ligeiramente achatado
+  const headGeo = new THREE.SphereGeometry(0.72, 32, 24);
+  // Achatar verticalmente para cara mais realista
+  headGeo.scale(1, 1.08, 0.95);
+  const head = new THREE.Mesh(headGeo, mSkin);
+  addOutline(head, 1.045);
+  av.headPivot.add(head);
+
+  // Bochechas (esferas sutis)
+  [[-1,1],[1,1]].forEach(([sx]) => {
+    const cheekGeo = new THREE.SphereGeometry(0.22, 12, 10);
+    const cheek    = new THREE.Mesh(cheekGeo, mat(0xffb09a, 0.6, 0));
+    cheek.position.set(sx * 0.50, -0.14, 0.55);
+    cheek.scale.set(1, 0.7, 0.6);
+    av.headPivot.add(cheek);
+  });
+
+  // ═══════════════════════════════════════════════════════
+  // CABELO
+  // ═══════════════════════════════════════════════════════
+  const hairCapGeo = new THREE.SphereGeometry(0.75, 24, 16, 0, Math.PI*2, 0, Math.PI*0.52);
+  const hairCap    = new THREE.Mesh(hairCapGeo, mHair);
+  hairCap.position.y = 0.04;
+  av.headPivot.add(hairCap);
+
+  // Franja
+  const fringeGeo = new THREE.CylinderGeometry(0.73, 0.68, 0.22, 20, 1, true, -0.4, 1.5);
+  const fringe    = new THREE.Mesh(fringeGeo, mHair);
+  fringe.position.set(0, 0.3, 0.2);
+  av.headPivot.add(fringe);
+
+  // ═══════════════════════════════════════════════════════
+  // ORELHAS
+  // ═══════════════════════════════════════════════════════
+  [[-1,1],[1,1]].forEach(([sx]) => {
+    const earGeo  = new THREE.SphereGeometry(0.18, 12, 10);
+    earGeo.scale(0.6, 1, 0.5);
+    const ear     = new THREE.Mesh(earGeo, mSkin);
+    ear.position.set(sx * 0.73, -0.08, 0);
+    addOutline(ear, 1.1);
+    av.headPivot.add(ear);
+
+    // Interior da orelha
+    const innerGeo = new THREE.SphereGeometry(0.10, 10, 8);
+    innerGeo.scale(0.5, 0.8, 0.4);
+    const inner    = new THREE.Mesh(innerGeo, mat(0xeea080, 0.7, 0));
+    inner.position.set(sx * 0.78, -0.08, 0.04);
+    av.headPivot.add(inner);
+  });
+
+  // ═══════════════════════════════════════════════════════
+  // NARIZ
+  // ═══════════════════════════════════════════════════════
+  const noseGeo  = new THREE.SphereGeometry(0.12, 10, 8);
+  noseGeo.scale(1, 0.7, 1.2);
+  const nose     = new THREE.Mesh(noseGeo, mSkinD);
+  nose.position.set(0, -0.12, 0.68);
+  av.headPivot.add(nose);
+
+  // Narinas
+  [[-0.07],[0.07]].forEach(([nx]) => {
+    const nostGeo  = new THREE.SphereGeometry(0.04, 8, 6);
+    const nostril  = new THREE.Mesh(nostGeo, mat(0xc97a50, 0.5, 0));
+    nostril.position.set(nx, -0.18, 0.70);
+    av.headPivot.add(nostril);
+  });
+
+  // ═══════════════════════════════════════════════════════
+  // OLHOS (pivot para piscada e movimento)
+  // ═══════════════════════════════════════════════════════
+  av.eyeL = buildEye( 1, av.headPivot, mEyeW, mIris, mPupil, mOutline);
+  av.eyeR = buildEye(-1, av.headPivot, mEyeW, mIris, mPupil, mOutline);
+
+  // ═══════════════════════════════════════════════════════
+  // SOBRANCELHAS
+  // ═══════════════════════════════════════════════════════
+  av.browL = buildBrow( 1, av.headPivot, mBrow);
+  av.browR = buildBrow(-1, av.headPivot, mBrow);
+
+  // ═══════════════════════════════════════════════════════
+  // BOCA (pivot para abertura)
+  // ═══════════════════════════════════════════════════════
+  av.mouth = buildMouth(av.headPivot, mMouth, mInner, mTooth);
+
+  // Posicionamento final do avatar
+  av.root.position.y = -0.2;
+
+  return av;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 10a. Sub-construtores do avatar
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Constrói um olho completo com esclera, íris, pupila, pálpebra.
+ * sx = +1 (esquerdo do avatar / direito do usuário) ou -1
+ */
+function buildEye(sx, parent, mWhite, mIris, mPupil, mOutline) {
+  const eye = { pivot: new THREE.Group() };
+  eye.pivot.position.set(sx * 0.30, 0.14, 0.60);
+  parent.add(eye.pivot);
+
+  // Esclera (olho branco)
+  const sclGeo = new THREE.SphereGeometry(0.155, 20, 16);
+  sclGeo.scale(1, 1, 0.85);
+  eye.sclera = new THREE.Mesh(sclGeo, mWhite);
+  eye.pivot.add(eye.sclera);
+
+  // Íris
+  const irisGeo = new THREE.SphereGeometry(0.10, 16, 14);
+  irisGeo.scale(1, 1, 0.5);
+  eye.iris = new THREE.Mesh(irisGeo, mIris);
+  eye.iris.position.z = 0.08;
+  eye.pivot.add(eye.iris);
+
+  // Pupila
+  const pupGeo = new THREE.SphereGeometry(0.055, 12, 10);
+  pupGeo.scale(1, 1, 0.4);
+  eye.pupil = new THREE.Mesh(pupGeo, mPupil);
+  eye.pupil.position.z = 0.12;
+  eye.pivot.add(eye.pupil);
+
+  // Brilho especular (highlight)
+  const hlGeo = new THREE.SphereGeometry(0.022, 8, 6);
+  const hlMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const hl    = new THREE.Mesh(hlGeo, hlMat);
+  hl.position.set(0.04, 0.04, 0.14);
+  eye.pivot.add(hl);
+
+  // Pálpebra superior (fecha de cima)
+  const lidTopGeo = new THREE.SphereGeometry(0.165, 20, 8, 0, Math.PI*2, 0, Math.PI*0.52);
+  eye.lidTop = new THREE.Mesh(lidTopGeo, new THREE.MeshStandardMaterial({
+    color: 0xf5c8a0, roughness: 0.4, metalness: 0,
+    side: THREE.FrontSide,
+  }));
+  eye.lidTop.rotation.x = -Math.PI * 0.5;
+  eye.lidTop.position.z = 0.01;
+  eye.pivot.add(eye.lidTop);
+
+  // Pálpebra inferior
+  const lidBotGeo = new THREE.SphereGeometry(0.165, 20, 8, 0, Math.PI*2, Math.PI*0.5, Math.PI*0.5);
+  eye.lidBot = new THREE.Mesh(lidBotGeo, eye.lidTop.material.clone());
+  eye.lidBot.rotation.x = -Math.PI * 0.5;
+  eye.lidBot.position.z = 0.01;
+  eye.pivot.add(eye.lidBot);
+
+  // Contorno do olho
+  const outGeo = new THREE.SphereGeometry(0.168, 20, 16);
+  outGeo.scale(1, 1, 0.85);
+  const outMesh = new THREE.Mesh(outGeo, mOutline.clone());
+  outMesh.scale.setScalar(1.06);
+  eye.pivot.add(outMesh);
+
+  // Estado inicial pálpebras
+  eye.lidTop.rotation.x = 0;
+  eye.lidBot.rotation.x = 0;
+
+  return eye;
+}
+
+/**
+ * Constrói uma sobrancelha.
+ */
+function buildBrow(sx, parent, mBrow) {
+  const browPivot = new THREE.Group();
+  browPivot.position.set(sx * 0.29, 0.39, 0.57);
+  parent.add(browPivot);
+
+  // Torus achatado como sobrancelha
+  const geo  = new THREE.TorusGeometry(0.12, 0.028, 8, 16, Math.PI);
+  const mesh = new THREE.Mesh(geo, mBrow);
+  mesh.rotation.z = sx > 0 ? -0.15 : 0.15;
+  mesh.rotation.x =  0.5;
+  mesh.scale.set(1, 0.6, 1);
+  browPivot.add(mesh);
+
+  return browPivot;
+}
+
+/**
+ * Constrói o conjunto da boca (lábios + interior + dentes).
+ */
+function buildMouth(parent, mMouth, mInner, mTooth) {
+  const mouth = { pivot: new THREE.Group() };
+  mouth.pivot.position.set(0, -0.32, 0.66);
+  parent.add(mouth.pivot);
+
+  // ── Lábio superior ──────────────────────────────
+  const topGeo  = new THREE.TorusGeometry(0.14, 0.04, 10, 22, Math.PI);
+  mouth.lipTop  = new THREE.Mesh(topGeo, mMouth.clone());
+  mouth.lipTop.rotation.z = Math.PI;
+  mouth.lipTop.position.y = 0.04;
+  mouth.pivot.add(mouth.lipTop);
+
+  // ── Lábio inferior ──────────────────────────────
+  const botGeo  = new THREE.TorusGeometry(0.14, 0.045, 10, 22, Math.PI);
+  mouth.lipBot  = new THREE.Mesh(botGeo, mMouth.clone());
+  mouth.lipBot.position.y = -0.04;
+  mouth.pivot.add(mouth.lipBot);
+
+  // ── Interior da boca (visível quando aberta) ────
+  const innerGeo  = new THREE.SphereGeometry(0.12, 16, 10, 0, Math.PI*2, Math.PI*0.1, Math.PI*0.75);
+  mouth.inner     = new THREE.Mesh(innerGeo, mInner);
+  mouth.inner.rotation.x = -0.3;
+  mouth.inner.position.y = -0.01;
+  mouth.inner.scale.setScalar(0.01); // começa invisível
+  mouth.pivot.add(mouth.inner);
+
+  // ── Dentes superiores ───────────────────────────
+  mouth.teethTop = new THREE.Group();
+  mouth.teethTop.position.y = 0.03;
+  for (let i = -2; i <= 2; i++) {
+    const tGeo  = new THREE.BoxGeometry(0.055, 0.06, 0.03);
+    const tooth = new THREE.Mesh(tGeo, mTooth);
+    tooth.position.set(i * 0.057, 0, 0.10);
+    mouth.teethTop.add(tooth);
+  }
+  mouth.teethTop.scale.setScalar(0.01);
+  mouth.pivot.add(mouth.teethTop);
+
+  return mouth;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 11. ANIMAÇÃO DO AVATAR
+// ─────────────────────────────────────────────────────────────────
+
+const clock = new THREE.Clock();
+
+/**
+ * Aplica todos os parâmetros faciais de App.face ao avatar.
+ * Chamado a cada frame do RAF.
+ */
+function animateAvatar() {
+  const av = App.avatar;
+  const f  = App.face;
+  const t  = clock.getElapsedTime();
+
+  // ── Rotação da cabeça ─────────────────────────────────
+  av.headPivot.rotation.x = THREE.MathUtils.clamp(f.pitch, -0.55, 0.55);
+  av.headPivot.rotation.y = THREE.MathUtils.clamp(f.yaw,   -0.65, 0.65);
+  av.headPivot.rotation.z = THREE.MathUtils.clamp(f.roll,  -0.40, 0.40);
+
+  // ── Escala (distância da câmera) ──────────────────────
+  const scaleTarget = App.running ? f.scale : 1;
+  av.root.scale.setScalar(THREE.MathUtils.lerp(av.root.scale.x, scaleTarget, 0.08));
+
+  // ── Olhos: piscada ────────────────────────────────────
+  // Pálpebra superior fecha de cima (rotation.x negativo fecha)
+  const blinkAngL = f.blinkL * Math.PI * 0.55;
+  const blinkAngR = f.blinkR * Math.PI * 0.55;
+
+  av.eyeL.lidTop.rotation.x = -blinkAngL;
+  av.eyeR.lidTop.rotation.x = -blinkAngR;
+  av.eyeL.lidBot.rotation.x =  blinkAngL * 0.3;
+  av.eyeR.lidBot.rotation.x =  blinkAngR * 0.3;
+
+  // Encolher íris/pupila durante piscada
+  const visL = 1 - f.blinkL * 0.95;
+  const visR = 1 - f.blinkR * 0.95;
+  av.eyeL.iris.scale.y  = visL;
+  av.eyeL.pupil.scale.y = visL;
+  av.eyeR.iris.scale.y  = visR;
+  av.eyeR.pupil.scale.y = visR;
+
+  // ── Olhos: direção do olhar ───────────────────────────
+  const gazeX = THREE.MathUtils.clamp(f.gazeX, -1, 1) * 0.06;
+  const gazeY = THREE.MathUtils.clamp(f.gazeY, -1, 1) * 0.06;
+
+  [av.eyeL, av.eyeR].forEach(eye => {
+    eye.iris.position.x  = gazeX;
+    eye.iris.position.y  = gazeY;
+    eye.pupil.position.x = gazeX;
+    eye.pupil.position.y = gazeY;
+  });
+
+  // ── Sobrancelhas ──────────────────────────────────────
+  const browOffsetL = f.browL * 0.12;
+  const browOffsetR = f.browR * 0.12;
+  av.browL.position.y = 0.39 + browOffsetL;
+  av.browR.position.y = 0.39 + browOffsetR;
+  // Ligeira inclinação baseada na diferença (expressividade)
+  av.browL.rotation.z = browOffsetL * -0.5;
+  av.browR.rotation.z = browOffsetR *  0.5;
+
+  // ── Boca: abertura ────────────────────────────────────
+  const mo = THREE.MathUtils.clamp(f.mouthOpen, 0, 1);
+  const sm = THREE.MathUtils.clamp(f.smile,     0, 1);
+
+  // Lábio superior sobe levemente
+  av.mouth.lipTop.position.y = 0.04 + mo * 0.06 + sm * 0.02;
+  // Lábio inferior desce
+  av.mouth.lipBot.position.y = -0.04 - mo * 0.09;
+  // Largura dos lábios aumenta com sorriso
+  const smileScaleX = 1 + sm * 0.35;
+  av.mouth.lipTop.scale.x = smileScaleX;
+  av.mouth.lipBot.scale.x = smileScaleX;
+  // Curvatura do lábio inferior (sorriso)
+  av.mouth.lipBot.rotation.z = sm * -0.1;
+
+  // Interior e dentes aparecem ao abrir a boca
+  const mouthVisibility = Math.max(mo - 0.15, 0) / 0.85;
+  av.mouth.inner.scale.setScalar(THREE.MathUtils.lerp(av.mouth.inner.scale.x, Math.max(mouthVisibility, 0.001), 0.15));
+  av.mouth.teethTop.scale.setScalar(THREE.MathUtils.lerp(av.mouth.teethTop.scale.x, Math.max(mouthVisibility * 0.85, 0.001), 0.15));
+
+  // ── Animação idle (quando câmera inativa) ────────────
+  if (!App.running) {
+    av.headPivot.rotation.y = Math.sin(t * 0.5) * 0.12;
+    av.headPivot.rotation.x = Math.sin(t * 0.3) * 0.05;
+    av.root.position.y = Math.sin(t * 0.8) * 0.03 - 0.2;
+    // Piscada automática idle
+    const idleBlink = Math.max(0, 1 - Math.abs(((t * 0.6) % 1) - 0.05) * 40);
+    av.eyeL.lidTop.rotation.x = -idleBlink * Math.PI * 0.5;
+    av.eyeR.lidTop.rotation.x = -idleBlink * Math.PI * 0.5;
+    av.eyeL.iris.scale.y = av.eyeR.iris.scale.y = 1 - idleBlink * 0.95;
+    av.eyeL.pupil.scale.y = av.eyeR.pupil.scale.y = 1 - idleBlink * 0.95;
+  } else {
+    // Suave balanço de respiração enquanto rastreia
+    av.root.position.y = Math.sin(t * 0.4) * 0.01 - 0.2;
+  }
+
+  // ── Partículas de fundo: rotação lenta ───────────────
+  const particles = App.scene.getObjectByName('bg-particles');
+  if (particles) particles.rotation.y = t * 0.04;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 12. ANIMAÇÃO IDLE (antes de iniciar)
+// ─────────────────────────────────────────────────────────────────
+
+function startIdleAnimation() {
+  function idleLoop() {
+    if (App.running) return; // loop de rastreamento assume
+    animateAvatar();
+    App.renderer.render(App.scene, App.camera);
+    requestAnimationFrame(idleLoop);
+  }
+  requestAnimationFrame(idleLoop);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 13. TRATAMENTO DE ERROS DE CÂMERA
+// ─────────────────────────────────────────────────────────────────
+
+function handleCameraError(err) {
+  let title = 'Acesso à câmera negado';
+  let msg   = 'Vá em Configurações › Privacidade › Câmera e permita o acesso para este site.';
+
+  if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+    title = 'Câmera não encontrada';
+    msg   = 'Nenhuma câmera foi detectada no dispositivo.';
+  } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+    title = 'Câmera em uso';
+    msg   = 'A câmera está sendo usada por outro aplicativo. Feche-o e tente novamente.';
+  } else if (err.name === 'OverconstrainedError') {
+    title = 'Câmera incompatível';
+    msg   = 'A câmera não suporta as configurações solicitadas.';
+  }
+
+  showError(title, msg);
+}
+
+function showError(title, msg) {
+  document.getElementById('errTitle').textContent = title;
+  document.getElementById('errMsg').textContent   = msg;
+  document.getElementById('errorPanel').classList.add('show');
+  setStatus(title, 'err');
+}
+
+function hideError() {
+  document.getElementById('errorPanel').classList.remove('show');
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 14. ATUALIZAÇÃO DO HUD
+// ─────────────────────────────────────────────────────────────────
+
+function setCamStatus(active) {
+  const dot   = document.getElementById('camDot');
+  const label = document.getElementById('camLabel');
+  dot.className   = 'dot ' + (active ? 'dot-green' : 'dot-red');
+  label.textContent = active ? 'Câmera ativa' : 'Câmera inativa';
+}
+
+function setFaceStatus(detected) {
+  const dot   = document.getElementById('faceDot');
+  const label = document.getElementById('faceLabel');
+  dot.className   = 'dot ' + (detected ? 'dot-green' : 'dot-yellow');
+  label.textContent = detected ? 'Rosto detectado' : 'Sem rosto';
+}
+
+function updateFpsHud(fps) {
+  const dot = document.getElementById('fpsDot');
+  const val = document.getElementById('fpsVal');
+  val.textContent = fps + ' FPS';
+  dot.className = 'dot ' + (fps >= 25 ? 'dot-green' : fps >= 15 ? 'dot-yellow' : 'dot-red');
+}
+
+function setStatus(msg, type='') {
+  const el = document.getElementById('status-msg');
+  el.textContent  = msg;
+  el.className    = type;
+}
+
+function setBtnState(running) {
+  document.getElementById('btnStart').disabled = running;
+  document.getElementById('btnStop') .disabled = !running;
+}
+
+function setSplashDetail(txt) {
+  document.getElementById('splashDetail').textContent = txt;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 15. PREVENÇÃO DE SONO DA TELA (Wake Lock API)
+// ─────────────────────────────────────────────────────────────────
+
+let wakeLock = null;
+
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+    }
+  } catch { /* silenciar */ }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && App.running) {
+    requestWakeLock();
   }
 });
 
-// ===== CÂMERA =====
-let camera;
+// Solicitar wake lock ao iniciar
+const origStart = startApp;
+window.startApp = async function() {
+  await requestWakeLock();
+  await origStart();
+};
 
-async function start(){
-  const stream = await navigator.mediaDevices.getUserMedia({video:true});
-  video.srcObject = stream;
-
-  camera = new Camera(video,{
-    onFrame: async ()=>{
-      if(running) await faceMesh.send({image:video});
-    },
-    width:320,
-    height:240
-  });
-
-  camera.start();
-}
-
-function toggleCamera(){
-  running = !running;
-  document.getElementById("camBtn").innerText = running?"Stop":"Start";
-}
-
-// ===== CONTROLES =====
-function setStyle(s){
-  style=s;
-}
-
-function toggleMesh(){
-  showMesh=!showMesh;
-}
-
-function snapshot(){
-  const a=document.createElement("a");
-  a.href=canvas.toDataURL();
-  a.download="avatar.png";
-  a.click();
-}
-
-// ===== INIT =====
-start();
 </script>
-
 </body>
 </html>
