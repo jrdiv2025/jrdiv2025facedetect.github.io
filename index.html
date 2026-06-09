@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Face Mesh</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: 'Share Tech Mono', monospace;
+    overflow: hidden;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 255, 80, 0.015) 2px,
+      rgba(0, 255, 80, 0.015) 4px
+    );
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 18px;
+  }
+
+  .header h1 {
+    font-family: 'Orbitron', monospace;
+    font-size: 13px;
+    letter-spacing: 6px;
+    color: #00ff50;
+    text-shadow: 0 0 10px #00ff5088;
+    text-transform: uppercase;
+  }
+
+  .header .sub {
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: #00ff5055;
+    margin-top: 4px;
+  }
+
+  .container {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+  }
+
+  .panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .label {
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: #00ff5077;
+    text-transform: uppercase;
+  }
+
+  .frame {
+    position: relative;
+    width: 180px;
+    height: 240px;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  /* Corner brackets */
+  .frame::before,
+  .frame::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    z-index: 10;
+  }
+  .frame::before {
+    top: 6px; left: 6px;
+    border-top: 2px solid #00ff50;
+    border-left: 2px solid #00ff50;
+    border-radius: 3px 0 0 0;
+  }
+  .frame::after {
+    bottom: 6px; right: 6px;
+    border-bottom: 2px solid #00ff50;
+    border-right: 2px solid #00ff50;
+    border-radius: 0 0 3px 0;
+  }
+
+  .corner-tr, .corner-bl {
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    z-index: 10;
+  }
+  .corner-tr {
+    top: 6px; right: 6px;
+    border-top: 2px solid #00ff50;
+    border-right: 2px solid #00ff50;
+    border-radius: 0 3px 0 0;
+  }
+  .corner-bl {
+    bottom: 6px; left: 6px;
+    border-bottom: 2px solid #00ff50;
+    border-left: 2px solid #00ff50;
+    border-radius: 0 0 0 3px;
+  }
+
+  video, canvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 10px;
+    background: #060f06;
+    object-fit: cover;
+  }
+
+  video {
+    transform: scaleX(-1);
+  }
+
+  /* Vignette on video */
+  .vignette {
+    position: absolute;
+    inset: 0;
+    border-radius: 10px;
+    background: radial-gradient(ellipse at center, transparent 60%, #000000aa 100%);
+    z-index: 5;
+    pointer-events: none;
+  }
+
+  .divider {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    color: #00ff5033;
+    font-size: 11px;
+  }
+
+  .divider .line {
+    width: 1px;
+    height: 40px;
+    background: linear-gradient(to bottom, transparent, #00ff5055, transparent);
+  }
+
+  .status {
+    margin-top: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: #00ff5055;
+    text-transform: uppercase;
+  }
+
+  .dot {
+    width: 6px;
+    height: 6px;
+    background: #00ff50;
+    border-radius: 50%;
+    box-shadow: 0 0 6px #00ff50;
+    animation: blink 1.4s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.2; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Face Mesh</h1>
+  <div class="sub">MediaPipe · Real-time Detection</div>
+</div>
+
+<div class="container">
+
+  <div class="panel">
+    <div class="label">Input</div>
+    <div class="frame">
+      <video id="video" autoplay playsinline></video>
+      <div class="vignette"></div>
+      <div class="corner-tr"></div>
+      <div class="corner-bl"></div>
+    </div>
+  </div>
+
+  <div class="divider">
+    <div class="line"></div>
+    ▶
+    <div class="line"></div>
+  </div>
+
+  <div class="panel">
+    <div class="label">Mesh</div>
+    <div class="frame">
+      <canvas id="canvas"></canvas>
+      <div class="vignette"></div>
+      <div class="corner-tr"></div>
+      <div class="corner-bl"></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="status">
+  <div class="dot"></div>
+  <span id="statusText">Iniciando câmera...</span>
+</div>
+
+<!-- MediaPipe -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+<script>
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const statusText = document.getElementById("statusText");
+
+canvas.width = 180;
+canvas.height = 240;
+
+const faceMesh = new FaceMesh({
+  locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+});
+
+faceMesh.setOptions({
+  maxNumFaces: 1,
+  refineLandmarks: true,
+  minDetectionConfidence: 0.6,
+  minTrackingConfidence: 0.6
+});
+
+faceMesh.onResults((results) => {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Dark background
+  ctx.fillStyle = '#060f06';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+    const landmarks = results.multiFaceLandmarks[0];
+
+    drawConnectors(ctx, landmarks, FACEMESH_TESSELATION,
+      { color: '#00ff5030', lineWidth: 0.4 });
+
+    drawConnectors(ctx, landmarks, FACEMESH_CONTOURS,
+      { color: '#00ff50', lineWidth: 1 });
+
+    drawLandmarks(ctx, landmarks,
+      { color: '#00ff5099', radius: 0.8 });
+
+    statusText.textContent = "Rosto detectado";
+  } else {
+    statusText.textContent = "Aguardando rosto...";
+  }
+});
+
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user", width: { ideal: 320 }, height: { ideal: 240 } },
+      audio: false
+    });
+
+    video.srcObject = stream;
+
+    video.onloadedmetadata = () => {
+      video.play();
+      statusText.textContent = "Câmera ativa";
+
+      const camera = new Camera(video, {
+        onFrame: async () => {
+          await faceMesh.send({ image: video });
+        },
+        width: 320,
+        height: 240
+      });
+
+      camera.start();
+    };
+  } catch (err) {
+    statusText.textContent = "Erro: permissão negada";
+    console.error(err);
+  }
+}
+
+startCamera();
+</script>
+
+</body>
+</html>
